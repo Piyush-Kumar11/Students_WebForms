@@ -1,148 +1,138 @@
-﻿using System;
-using System.Configuration;
-using System.Data;
-using System.Data.SqlClient;
-using System.Web.UI.WebControls;
+﻿using System;  
+using System.Data; 
+using System.Web.UI.WebControls; 
 
 namespace StudentInformationWebForms
 {
     public partial class Students : System.Web.UI.Page
     {
-        private readonly string connectionString = ConfigurationManager.ConnectionStrings["DbConnection"].ConnectionString;
+        private StudentDAL studentDAL = new StudentDAL();
 
+        // Event that runs when the page loads.
         protected void Page_Load(object sender, EventArgs e)
         {
+            // Check if this is the first time the page is loading (not a postback)
             if (!IsPostBack)
             {
-                LoadStudents();
+                LoadStudents();  // Load student records into the GridView.
             }
         }
 
-        // Load Students into GridView
+        // Method to load students from the database into the GridView.
         private void LoadStudents()
         {
-            using (SqlConnection con = new SqlConnection(connectionString))
-            {
-                using (SqlCommand cmd = new SqlCommand("sp_getAllStudents", con))
-                {
-                    cmd.CommandType = CommandType.StoredProcedure;
-                    SqlDataAdapter da = new SqlDataAdapter(cmd);
-                    DataTable dt = new DataTable();
-                    da.Fill(dt);
-                    gvStudents.DataSource = dt;
-                    gvStudents.DataBind();
-                }
-            }
+            gvStudents.DataSource = studentDAL.GetAllStudents(); // Fetch data from DB.
+            gvStudents.DataBind(); // Bind the data to the GridView for display.
         }
 
-        // Add New Student Button Click
+        // Event handler for the "Add New Student" button click.
         protected void btnAdd_Click(object sender, EventArgs e)
         {
-            pnlStudentForm.Visible = true;
-            lblFormTitle.Text = "Add New Student";
-            btnSave.Text = "Save";
-            hfStudentId.Value = "";
-            ClearFields();
+            pnlStudentForm.Visible = true;  // Show the student form panel.
+            lblFormTitle.Text = "Add New Student";  // Set form title.
+            btnSave.Text = "Save";  // Set button text to "Save".
+            hfStudentId.Value = "";  // Clear the hidden field for student ID.
+            ClearFields();  // Clear all input fields.
         }
 
-        // Save or Update Student
+        // Event handler for Save/Update Student button click.
         protected void btnSave_Click(object sender, EventArgs e)
         {
-            using (SqlConnection con = new SqlConnection(connectionString))
+            // Check if validation controls have errors
+            if (!Page.IsValid)
             {
-                con.Open();
-                using (SqlCommand cmd = new SqlCommand(hfStudentId.Value == "" ? "sp_insertStudent" : "sp_updateStudent", con))
-                {
-                    cmd.CommandType = CommandType.StoredProcedure;
-                    if (hfStudentId.Value != "")
-                        cmd.Parameters.AddWithValue("@studentId", Convert.ToInt32(hfStudentId.Value));
-
-                    cmd.Parameters.AddWithValue("@name", txtName.Text.Trim());
-                    cmd.Parameters.AddWithValue("@age", Convert.ToInt32(txtAge.Text.Trim()));
-                    cmd.Parameters.AddWithValue("@email", txtEmail.Text.Trim());
-
-                    cmd.ExecuteNonQuery();
-                }
-                con.Close();
+                return; // Stop processing if input is invalid
             }
 
-            LoadStudents();
-            pnlStudentForm.Visible = false;
+            // Convert values
+            int? studentId = string.IsNullOrEmpty(hfStudentId.Value) ? (int?)null : Convert.ToInt32(hfStudentId.Value);
+            string name = txtName.Text.Trim();
+            int age = Convert.ToInt32(txtAge.Text.Trim());
+            string email = txtEmail.Text.Trim();
+
+            // Additional Server-side Validation (Backup for Security)
+            if (name.Length < 2)
+            {
+                lblMessage.Text = "Name must be at least 2 characters.";
+                lblMessage.CssClass = "text-danger";
+                return;
+            }
+            if (age <= 0)
+            {
+                lblMessage.Text = "Age must be greater than 0.";
+                lblMessage.CssClass = "text-danger";
+                return;
+            }
+            if (!System.Text.RegularExpressions.Regex.IsMatch(email, @"^[\w\.-]+@[\w\.-]+\.\w{2,4}$"))
+            {
+                lblMessage.Text = "Invalid email format.";
+                lblMessage.CssClass = "text-danger";
+                return;
+            }
+
+            // Save Student (Only if validation passes)
+            bool success = studentDAL.SaveStudent(studentId, name, age, email);
+
+            if (success)
+            {
+                lblMessage.Text = "Student saved successfully!";
+                lblMessage.CssClass = "text-success";
+                LoadStudents();
+                pnlStudentForm.Visible = false;
+            }
+            else
+            {
+                lblMessage.Text = "Error saving student. Please try again.";
+                lblMessage.CssClass = "text-danger";
+            }
         }
 
-        // Edit and Delete Actions
+
+        // Handles edit and delete actions in the GridView.
         protected void gvStudents_RowCommand(object sender, GridViewCommandEventArgs e)
         {
-            if (e.CommandName == "EditStudent")
+            if (e.CommandName == "EditStudent") // If the "Edit" button is clicked
             {
                 int studentId = Convert.ToInt32(e.CommandArgument);
                 LoadStudentById(studentId);
             }
-            else if (e.CommandName == "DeleteStudent")
+            else if (e.CommandName == "DeleteStudent") // If the "Delete" button is clicked
             {
                 int studentId = Convert.ToInt32(e.CommandArgument);
-                DeleteStudent(studentId);
+                studentDAL.DeleteStudent(studentId);
+                LoadStudents();
             }
         }
 
-        // Load Student for Editing
+        // Loads a student's details into the form for editing.
         private void LoadStudentById(int studentId)
         {
-            using (SqlConnection con = new SqlConnection(connectionString))
+            DataRow student = studentDAL.GetStudentById(studentId); // Fetch student details.
+            if (student != null)
             {
-                using (SqlCommand cmd = new SqlCommand("sp_getStudentById", con))
-                {
-                    cmd.CommandType = CommandType.StoredProcedure;
-                    cmd.Parameters.AddWithValue("@studentId", studentId);
-                    con.Open();
-                    SqlDataReader dr = cmd.ExecuteReader();
-
-                    if (dr.Read())
-                    {
-                        hfStudentId.Value = dr["StudentID"].ToString();
-                        txtName.Text = dr["Name"].ToString();
-                        txtAge.Text = dr["Age"].ToString();
-                        txtEmail.Text = dr["Email"].ToString();
-                        lblFormTitle.Text = "Edit Student";
-                        btnSave.Text = "Update";
-                        pnlStudentForm.Visible = true;
-                    }
-                    con.Close();
-                }
+                hfStudentId.Value = student["StudentID"].ToString(); // Store student ID in hidden field.
+                txtName.Text = student["Name"].ToString();
+                txtAge.Text = student["Age"].ToString(); 
+                txtEmail.Text = student["Email"].ToString();
+                lblFormTitle.Text = "Edit Student";
+                btnSave.Text = "Update"; 
+                pnlStudentForm.Visible = true; // Show the form panel.
             }
         }
 
-        // Delete Student
-        private void DeleteStudent(int studentId)
-        {
-            using (SqlConnection con = new SqlConnection(connectionString))
-            {
-                using (SqlCommand cmd = new SqlCommand("sp_deleteStudent", con))
-                {
-                    cmd.CommandType = CommandType.StoredProcedure;
-                    cmd.Parameters.AddWithValue("@studentId", studentId);
-                    con.Open();
-                    cmd.ExecuteNonQuery();
-                    con.Close();
-                }
-            }
-
-            LoadStudents();
-        }
-
-        // Cancel Form
+        // Event handler for the Cancel button click.
         protected void btnCancel_Click(object sender, EventArgs e)
         {
-            pnlStudentForm.Visible = false;
-            ClearFields();
+            pnlStudentForm.Visible = false; // Hide the student form panel.
+            ClearFields(); // Clear input fields.
         }
 
-        // Clear Input Fields
+        // Clears the input fields in the form.
         private void ClearFields()
         {
             txtName.Text = "";
-            txtAge.Text = "";
-            txtEmail.Text = "";
+            txtAge.Text = ""; 
+            txtEmail.Text = ""; 
         }
     }
 }
