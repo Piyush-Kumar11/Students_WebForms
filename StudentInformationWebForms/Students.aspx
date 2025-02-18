@@ -48,7 +48,7 @@
     <br /><br />
 
         <%-- Student Form Panel (Hidden by Default) --%>
-    <asp:Panel ID="pnlStudentForm" runat="server" CssClass="border p-3" Visible="False">
+    <asp:Panel ID="pnlStudentForm" runat="server" CssClass="border p-3" Visible="True">
         
         <%-- Form Title (Dynamically Changes to 'Add' or 'Edit' Mode) --%>
         <h3><asp:Label ID="lblFormTitle" runat="server" Text="Add New Student"></asp:Label></h3>

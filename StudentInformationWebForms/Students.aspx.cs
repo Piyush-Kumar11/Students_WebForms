@@ -1,6 +1,8 @@
-﻿using System;  
-using System.Data; 
-using System.Web.UI.WebControls; 
+﻿using System;
+using System.Data;
+using System.Text.RegularExpressions;
+using System.Web;
+using System.Web.UI.WebControls;
 
 namespace StudentInformationWebForms
 {
@@ -15,6 +17,16 @@ namespace StudentInformationWebForms
             if (!IsPostBack)
             {
                 LoadStudents();  // Load student records into the GridView.
+
+                // Retrieve cookie data
+                HttpCookie studentCookie = Request.Cookies["StudentInfo"];
+                if (studentCookie != null)
+                {
+                    txtName.Text = studentCookie["Name"];
+                    txtAge.Text = studentCookie["Age"];
+                    txtEmail.Text = studentCookie["Email"];
+                    lblMessage.Text = "Student data loaded from cookies.";
+                }
             }
         }
 
@@ -63,7 +75,7 @@ namespace StudentInformationWebForms
                 lblMessage.CssClass = "text-danger";
                 return;
             }
-            if (!System.Text.RegularExpressions.Regex.IsMatch(email, @"^[\w\.-]+@[\w\.-]+\.\w{2,4}$"))
+            if (!Regex.IsMatch(email, @"^[\w\.-]+@[\w\.-]+\.\w{2,4}$"))
             {
                 lblMessage.Text = "Invalid email format.";
                 lblMessage.CssClass = "text-danger";
@@ -75,7 +87,15 @@ namespace StudentInformationWebForms
 
             if (success)
             {
-                lblMessage.Text = "Student saved successfully!";
+                // Save data to cookies
+                HttpCookie studentCookie = new HttpCookie("StudentInfo");
+                studentCookie["Name"] = name;
+                studentCookie["Age"] = age.ToString();
+                studentCookie["Email"] = email;
+                studentCookie.Expires = DateTime.Now.AddDays(7); // Cookie valid for 7 days
+                Response.Cookies.Add(studentCookie);
+
+                lblMessage.Text = "Student saved successfully and data stored in cookies!";
                 lblMessage.CssClass = "text-success";
                 LoadStudents();
                 pnlStudentForm.Visible = false;
@@ -112,10 +132,10 @@ namespace StudentInformationWebForms
             {
                 hfStudentId.Value = student["StudentID"].ToString(); // Store student ID in hidden field.
                 txtName.Text = student["Name"].ToString();
-                txtAge.Text = student["Age"].ToString(); 
+                txtAge.Text = student["Age"].ToString();
                 txtEmail.Text = student["Email"].ToString();
                 lblFormTitle.Text = "Edit Student";
-                btnSave.Text = "Update"; 
+                btnSave.Text = "Update";
                 pnlStudentForm.Visible = true; // Show the form panel.
             }
         }
@@ -125,14 +145,23 @@ namespace StudentInformationWebForms
         {
             pnlStudentForm.Visible = false; // Hide the student form panel.
             ClearFields(); // Clear input fields.
+
+            // Clear cookies
+            if (Request.Cookies["StudentInfo"] != null)
+            {
+                HttpCookie studentCookie = new HttpCookie("StudentInfo");
+                studentCookie.Expires = DateTime.Now.AddDays(-1); // Expire the cookie
+                Response.Cookies.Add(studentCookie);
+                lblMessage.Text = "Cookies cleared.";
+            }
         }
 
         // Clears the input fields in the form.
         private void ClearFields()
         {
             txtName.Text = "";
-            txtAge.Text = ""; 
-            txtEmail.Text = ""; 
+            txtAge.Text = "";
+            txtEmail.Text = "";
         }
     }
 }
